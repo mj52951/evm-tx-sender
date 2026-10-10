@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/mj52951/evm-tx-sender/internal/api"
 	"github.com/mj52951/evm-tx-sender/internal/chain"
 	"github.com/mj52951/evm-tx-sender/internal/config"
 	txlog "github.com/mj52951/evm-tx-sender/internal/log"
@@ -79,11 +79,7 @@ func run() error {
 		"workers", len(workers),
 	)
 
-	// Placeholder; real router is wired in a later commit.
-	handler := http.NewServeMux()
-	handler.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	handler := api.New(service)
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- service.Start(ctx) }()
