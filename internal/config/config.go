@@ -18,8 +18,8 @@ type SenderConfig struct {
 	ResendInterval time.Duration `env:"RESEND_INTERVAL" envDefault:"30s"   validate:"gte=1s"`
 	MaxBumps       int           `env:"MAX_BUMPS"       envDefault:"3"     validate:"gte=0"`
 	BumpPercent    uint          `env:"BUMP_PERCENT"    envDefault:"125"   validate:"gte=110"`
-	IntakeBuffer   int           `env:"INTAKE_BUFFER"   envDefault:"1024"  validate:"gte=1"`
 	TickInterval   time.Duration `env:"TICK_INTERVAL"   envDefault:"1s"    validate:"gte=100ms"`
+	RPCTimeout     time.Duration `env:"RPC_TIMEOUT"     envDefault:"10s"   validate:"gte=1s"`
 }
 
 type EnvConfig struct {
