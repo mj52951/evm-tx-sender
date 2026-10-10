@@ -8,6 +8,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	golang.org/x/sync v0.24.0
 )
 
 require (
@@ -40,7 +41,6 @@ require (
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
