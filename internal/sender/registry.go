@@ -11,7 +11,9 @@ type JobRegistry struct {
 }
 
 func NewJobRegistry() *JobRegistry {
-	return &JobRegistry{jobs: make(map[string]*Job)}
+	return &JobRegistry{
+		jobs: make(map[string]*Job),
+	}
 }
 
 func (r *JobRegistry) Create(job *Job) {
@@ -45,3 +47,4 @@ func (r *JobRegistry) Update(id string, mutate func(*Job)) {
 	mutate(job)
 	job.UpdatedAt = time.Now()
 }
+

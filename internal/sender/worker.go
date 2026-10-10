@@ -86,14 +86,14 @@ func (w *Worker) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case job := <-w.jobs:
-			w.submitJob(ctx, job)
+			w.SubmitJob(ctx, job)
 		case <-tick.C:
-			w.updateInflight(ctx)
+			w.UpdateInflight(ctx)
 		}
 	}
 }
 
-func (w *Worker) submitJob(ctx context.Context, job *Job) {
+func (w *Worker) SubmitJob(ctx context.Context, job *Job) {
 	defer close(job.done)
 	log := slog.With("job_id", job.ID, "nonce", w.nextNonce)
 
@@ -147,9 +147,9 @@ func (w *Worker) submitJob(ctx context.Context, job *Job) {
 	log.Info("broadcast ok", "hash", result.Hash.Hex())
 }
 
-// updateInflight walks inflight in nonce order. All entries get receipt-polled;
+// UpdateInflight walks inflight in nonce order. All entries get receipt-polled;
 // at most the lowest unminded entry is considered for a bump.
-func (w *Worker) updateInflight(ctx context.Context) {
+func (w *Worker) UpdateInflight(ctx context.Context) {
 	for _, nonce := range slices.Sorted(maps.Keys(w.inflight)) {
 		jobID := w.inflight[nonce]
 		job, ok := w.registry.Get(jobID)
