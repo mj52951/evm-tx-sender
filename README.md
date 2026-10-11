@@ -211,7 +211,7 @@ Each worker is a single goroutine running broadcasts sequentially. Potential imp
 EIP-1559 only; Caller can override `gasLimit` / `maxFeePerGas` / `maxPriorityFeePerGas` per request.
 
 ### Stuck transaction handling
-After `MAX_BUMPS` without a receipt the job is marked `stuck` and and a specific error log is printed out for which an alert needs to be set up. This is a signal, not recovery. Full recovery needs periodic re-tracking of the tx (it may still mine or be evicted) plus an optional cancel-tx. A private feed (e.g. Flashbots Protect) that emits explicit `dropped` events would replace the polling.
+After `MAX_BUMPS` without a receipt the job is marked `stuck` and and a specific error log is printed out for which an alert needs to be set up. This is a signal, not recovery. Full recovery needs periodic re-tracking of the tx (it may still mine or be evicted) plus an optional cancel-tx. A private mempool (e.g. Flashbots Protect) that emits explicit `dropped` events would replace the polling.
 
 ### Security
 Private keys from env only; `PRIVATE_KEYS` is `unset` after read.
@@ -235,6 +235,9 @@ Keys read from env (and the var is `unset` after load for crash-dump safety). A 
 
 ### Idempotency-Key header
 Not implemented. Shape: client sends `Idempotency-Key`, server stores `(key -> jobID + SHA256(body))`. Same key + same hash -> return existing job; same key + different hash -> error code. Prevents double-send on client retry.
+
+### Request-ID in worker logs
+chi adds a RequestID at the HTTP layer but it doesn't reach the worker (worker runs on its own context). Threading request-id + job-id into every worker log line would make it easier to trace one request end-to-end. Also, adding additional debug logs throughout the codebase would be encouraged.
 
 ### More unit + integration tests
 More unit tests for all parts of the code, alongside possibly integration tests on a forked VM. 
