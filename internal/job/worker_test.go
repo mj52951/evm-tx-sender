@@ -20,7 +20,7 @@ import (
 	"github.com/mj52951/evm-tx-sender/internal/wallet"
 )
 
-func newTestWorker(t *testing.T, client *mocks.MockClient) *Worker {
+func newTestWorker(t *testing.T, client *mocks.MockClient) *EVMWorker {
 	t.Helper()
 	privKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestWorker_UpdateInflight(t *testing.T) {
 	tests := []struct {
 		name            string
 		prepareMocks    func(*mocks.MockClient)
-		seed            func(worker *Worker, job *Job)
+		seed            func(worker *EVMWorker, job *Job)
 		wantState       JobState
 		wantInflightLen int
 		wantAttempts    int // on job after tick
@@ -155,7 +155,7 @@ func TestWorker_UpdateInflight(t *testing.T) {
 					BlockNumber: big.NewInt(100),
 				}, nil)
 			},
-			seed: func(worker *Worker, job *Job) {
+			seed: func(worker *EVMWorker, job *Job) {
 				worker.inflight[42] = job.ID
 				worker.registry.Update(job.ID, func(j *Job) {
 					j.State = StateBroadcast
@@ -181,7 +181,7 @@ func TestWorker_UpdateInflight(t *testing.T) {
 					BlockNumber: big.NewInt(100),
 				}, nil)
 			},
-			seed: func(worker *Worker, job *Job) {
+			seed: func(worker *EVMWorker, job *Job) {
 				worker.inflight[42] = job.ID
 				worker.registry.Update(job.ID, func(j *Job) {
 					j.State = StateBroadcast
@@ -204,7 +204,7 @@ func TestWorker_UpdateInflight(t *testing.T) {
 					Return(nil, ethereum.NotFound)
 				client.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
 			},
-			seed: func(worker *Worker, job *Job) {
+			seed: func(worker *EVMWorker, job *Job) {
 				worker.inflight[42] = job.ID
 				worker.registry.Update(job.ID, func(j *Job) {
 					j.State = StateBroadcast
@@ -232,7 +232,7 @@ func TestWorker_UpdateInflight(t *testing.T) {
 					Return(nil, ethereum.NotFound).AnyTimes()
 				client.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(43), nil)
 			},
-			seed: func(worker *Worker, job *Job) {
+			seed: func(worker *EVMWorker, job *Job) {
 				worker.inflight[42] = job.ID
 				oldAttempt := Attempt{
 					Hash:     stuckHash,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -13,7 +14,8 @@ import (
 )
 
 type Handler struct {
-	service *job.Service
+	services map[uint64]job.Service
+	registry *job.JobRegistry
 }
 
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +31,13 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdJob, err := h.service.Submit(r.Context(), jobReq)
+	service, ok := h.services[jobReq.ChainID]
+	if !ok {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown chain %d", jobReq.ChainID))
+		return
+	}
+
+	createdJob, err := service.Submit(r.Context(), jobReq)
 	if err != nil {
 		switch {
 		case errors.Is(err, job.ErrUnknownSender):
@@ -45,16 +53,12 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := http.StatusCreated
-	if createdJob.State == job.StateFailed {
-		status = http.StatusBadGateway
-	}
-	writeJSON(w, status, NewJobResponse(createdJob))
+	writeJSON(w, http.StatusCreated, NewJobResponse(createdJob))
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobId")
-	fetchedJob, ok := h.service.Get(jobID)
+	fetchedJob, ok := h.registry.Get(jobID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "job not found")
 		return

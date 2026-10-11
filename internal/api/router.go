@@ -15,8 +15,8 @@ const requestTimeout = 30 * time.Second
 
 // New builds the fully-mounted HTTP router. Returned as http.Handler so the
 // caller doesn't need to import chi.
-func New(service *job.Service) http.Handler {
-	handler := &Handler{service: service}
+func New(services map[uint64]job.Service, registry *job.JobRegistry) http.Handler {
+	handler := &Handler{services: services, registry: registry}
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)

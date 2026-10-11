@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/mj52951/evm-tx-sender/internal/chain"
@@ -25,12 +24,12 @@ const intakeBuffer = 1024
 
 var ErrBusy = errors.New("worker intake full")
 
-type WorkerKey struct {
-	ChainID uint64
-	Sender  common.Address
+type Worker interface {
+	Submit(job *Job) error
+	Start(ctx context.Context) error
 }
 
-type Worker struct {
+type EVMWorker struct {
 	executor *wallet.Executor
 	client   chain.Client
 	registry *JobRegistry
@@ -41,13 +40,14 @@ type Worker struct {
 	inflight  map[uint64]string // nonce -> jobID
 }
 
+// NewWorker builds an EVMWorker bound to one (chain, wallet) pair.
 func NewWorker(
 	executor *wallet.Executor,
 	client chain.Client,
 	registry *JobRegistry,
 	cfg config.WorkerConfig,
-) *Worker {
-	return &Worker{
+) *EVMWorker {
+	return &EVMWorker{
 		executor: executor,
 		client:   client,
 		registry: registry,
@@ -58,7 +58,7 @@ func NewWorker(
 }
 
 // Submit queues the job for broadcast
-func (w *Worker) Submit(job *Job) error {
+func (w *EVMWorker) Submit(job *Job) error {
 	select {
 	case w.jobs <- job:
 		return nil
@@ -69,7 +69,7 @@ func (w *Worker) Submit(job *Job) error {
 
 // Start blocks until ctx is cancelled. Submits and ticks share a single
 // goroutine so nonce assignment and the inflight map stay lock-free.
-func (w *Worker) Start(ctx context.Context) error {
+func (w *EVMWorker) Start(ctx context.Context) error {
 	rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
 	nonce, err := w.executor.PendingNonce(rpcCtx)
 	cancel()
@@ -98,7 +98,7 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 // SubmitJob runs the initial broadcast attempt and closes job.done on return.
-func (w *Worker) SubmitJob(ctx context.Context, job *Job) {
+func (w *EVMWorker) SubmitJob(ctx context.Context, job *Job) {
 	defer close(job.done)
 	log := slog.With("job_id", job.ID, "nonce", w.nextNonce)
 
@@ -154,7 +154,7 @@ func (w *Worker) SubmitJob(ctx context.Context, job *Job) {
 
 // UpdateInflight walks inflight in nonce order. All entries get receipt-polled;
 // at most the lowest unminded entry is considered for a bump.
-func (w *Worker) UpdateInflight(ctx context.Context) {
+func (w *EVMWorker) UpdateInflight(ctx context.Context) {
 	for _, nonce := range slices.Sorted(maps.Keys(w.inflight)) {
 		jobID := w.inflight[nonce]
 		job, ok := w.registry.Get(jobID)
@@ -178,7 +178,7 @@ func (w *Worker) UpdateInflight(ctx context.Context) {
 }
 
 // findReceipt returns the first receipt found across the given attempts, or nil.
-func (w *Worker) findReceipt(ctx context.Context, attempts []Attempt) *types.Receipt {
+func (w *EVMWorker) findReceipt(ctx context.Context, attempts []Attempt) *types.Receipt {
 	for _, attempt := range attempts {
 		rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
 		receipt, err := w.client.TransactionReceipt(rpcCtx, attempt.Hash)
@@ -196,7 +196,7 @@ func (w *Worker) findReceipt(ctx context.Context, attempts []Attempt) *types.Rec
 
 // tryBump decides what to do with the lowest unminded entry: wait, bump, or
 // give up
-func (w *Worker) tryBump(ctx context.Context, nonce uint64, jobID string, job *Job) {
+func (w *EVMWorker) tryBump(ctx context.Context, nonce uint64, jobID string, job *Job) {
 	lastAttempt := job.Execution.Attempts[len(job.Execution.Attempts)-1]
 	if time.Since(lastAttempt.SentAt) < w.cfg.ResendInterval {
 		return
@@ -212,7 +212,7 @@ func (w *Worker) tryBump(ctx context.Context, nonce uint64, jobID string, job *J
 }
 
 // finalise transitions the job to mined/reverted and removes it from inflight.
-func (w *Worker) finalise(nonce uint64, jobID string, receipt *types.Receipt) {
+func (w *EVMWorker) finalise(nonce uint64, jobID string, receipt *types.Receipt) {
 	state := StateMined
 	if receipt.Status == types.ReceiptStatusFailed {
 		state = StateReverted
@@ -231,7 +231,7 @@ func (w *Worker) finalise(nonce uint64, jobID string, receipt *types.Receipt) {
 }
 
 // markStuck records the stuck state, drops the inflight entry, and resyncs the nonce.
-func (w *Worker) markStuck(ctx context.Context, nonce uint64, jobID string) {
+func (w *EVMWorker) markStuck(ctx context.Context, nonce uint64, jobID string) {
 	w.registry.Update(jobID, func(j *Job) {
 		j.State = StateStuck
 		j.Execution.ErrorMsg = fmt.Sprintf("exceeded %d bumps without receipt", w.cfg.MaxBumps)
@@ -249,7 +249,7 @@ func (w *Worker) markStuck(ctx context.Context, nonce uint64, jobID string) {
 }
 
 // bumpInflight re-broadcasts the job with ceiling-bumped tip and fee caps.
-func (w *Worker) bumpInflight(ctx context.Context, job *Job, lastAttempt Attempt) {
+func (w *EVMWorker) bumpInflight(ctx context.Context, job *Job, lastAttempt Attempt) {
 	bumpCount := len(job.Execution.Attempts) - 1
 	log := slog.With("job_id", job.ID, "nonce", job.Execution.Nonce, "bump", bumpCount+1)
 
@@ -294,7 +294,7 @@ func (w *Worker) bumpInflight(ctx context.Context, job *Job, lastAttempt Attempt
 }
 
 // resyncNonce refreshes nextNonce from the chain. Logs on failure, no retry.
-func (w *Worker) resyncNonce(ctx context.Context) {
+func (w *EVMWorker) resyncNonce(ctx context.Context) {
 	rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
 	nonce, err := w.executor.PendingNonce(rpcCtx)
 	cancel()

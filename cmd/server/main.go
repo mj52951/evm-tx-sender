@@ -8,11 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/mj52951/evm-tx-sender/internal/api"
 	"github.com/mj52951/evm-tx-sender/internal/chain"
 	"github.com/mj52951/evm-tx-sender/internal/config"
+	"github.com/mj52951/evm-tx-sender/internal/job"
 	txlog "github.com/mj52951/evm-tx-sender/internal/log"
-	"github.com/mj52951/evm-tx-sender/internal/sender"
 	"github.com/mj52951/evm-tx-sender/internal/server"
 	"github.com/mj52951/evm-tx-sender/internal/wallet"
 )
@@ -45,14 +47,11 @@ func run() error {
 	defer cancel()
 	ctx = txlog.WithLogger(ctx, slog.Default())
 
-	// Dial every chain client up-front. A chain whose dial fails is skipped
-	// and the service continues on the rest.
 	clients := make(map[uint64]chain.Client, len(chains))
 	for chainID, chainCfg := range chains {
 		client, err := chain.New(ctx, chainCfg)
 		if err != nil {
-			// ALERTING: wire a production alert on this warn log so operators
-			// know a chain is unreachable and the service is running degraded.
+			// ALERTING: make sure to alert the chain hasn't been properly start up
 			slog.Warn("failed to dial chain, skipping", "chain_id", chainID, "error", err)
 			continue
 		}
@@ -60,29 +59,27 @@ func run() error {
 		clients[chainID] = client
 	}
 
-	registry := sender.NewJobRegistry()
-	workers := make(map[sender.WorkerKey]*sender.Worker, len(clients)*len(wallets))
+	registry := job.NewJobRegistry()
+	services := make(map[uint64]job.Service, len(clients))
 	for chainID, client := range clients {
+		workers := make(map[common.Address]job.Worker, len(wallets))
 		for _, signer := range wallets {
 			executor := wallet.New(client, signer.PrivateKey)
-			workers[sender.WorkerKey{ChainID: chainID, Sender: signer.Address}] = sender.NewWorker(
-				executor, client, registry, envCfg.Sender,
-			)
+			workers[signer.Address] = job.NewWorker(executor, client, registry, envCfg.WorkerCfg)
 		}
+		services[chainID] = job.NewService(chainID, workers, registry)
 	}
-	service := sender.NewService(workers, registry)
 
 	slog.Info("starting evm-tx-sender",
 		"http_addr", envCfg.HTTPAddr,
-		"chains", len(clients),
+		"chains", len(services),
 		"wallets", len(wallets),
-		"workers", len(workers),
 	)
 
-	handler := api.New(service)
+	handler := api.New(services, registry)
 
 	errCh := make(chan error, 2)
-	go func() { errCh <- service.Start(ctx) }()
+	go func() { errCh <- job.StartAll(ctx, services) }()
 	go func() { errCh <- server.Start(ctx, envCfg.HTTPAddr, handler) }()
 
 	sig := make(chan os.Signal, 1)
