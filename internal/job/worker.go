@@ -1,4 +1,4 @@
-package sender
+package job
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/mj52951/evm-tx-sender/internal/chain"
@@ -24,11 +25,16 @@ const intakeBuffer = 1024
 
 var ErrBusy = errors.New("worker intake full")
 
+type WorkerKey struct {
+	ChainID uint64
+	Sender  common.Address
+}
+
 type Worker struct {
 	executor *wallet.Executor
 	client   chain.Client
 	registry *JobRegistry
-	cfg      config.SenderConfig
+	cfg      config.WorkerConfig
 
 	jobs      chan *Job
 	nextNonce uint64
@@ -39,7 +45,7 @@ func NewWorker(
 	executor *wallet.Executor,
 	client chain.Client,
 	registry *JobRegistry,
-	cfg config.SenderConfig,
+	cfg config.WorkerConfig,
 ) *Worker {
 	return &Worker{
 		executor: executor,
@@ -51,8 +57,7 @@ func NewWorker(
 	}
 }
 
-// Submit queues the job for broadcast. Caller blocks on job.Done() to await
-// the first broadcast attempt, then reads the final state from the registry.
+// Submit queues the job for broadcast
 func (w *Worker) Submit(job *Job) error {
 	select {
 	case w.jobs <- job:
@@ -64,7 +69,6 @@ func (w *Worker) Submit(job *Job) error {
 
 // Start blocks until ctx is cancelled. Submits and ticks share a single
 // goroutine so nonce assignment and the inflight map stay lock-free.
-// Scale throughput horizontally by running more workers (more EOAs per chain).
 func (w *Worker) Start(ctx context.Context) error {
 	rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
 	nonce, err := w.executor.PendingNonce(rpcCtx)
@@ -93,6 +97,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	}
 }
 
+// SubmitJob runs the initial broadcast attempt and closes job.done on return.
 func (w *Worker) SubmitJob(ctx context.Context, job *Job) {
 	defer close(job.done)
 	log := slog.With("job_id", job.ID, "nonce", w.nextNonce)
@@ -172,6 +177,7 @@ func (w *Worker) UpdateInflight(ctx context.Context) {
 	}
 }
 
+// findReceipt returns the first receipt found across the given attempts, or nil.
 func (w *Worker) findReceipt(ctx context.Context, attempts []Attempt) *types.Receipt {
 	for _, attempt := range attempts {
 		rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
@@ -189,8 +195,7 @@ func (w *Worker) findReceipt(ctx context.Context, attempts []Attempt) *types.Rec
 }
 
 // tryBump decides what to do with the lowest unminded entry: wait, bump, or
-// give up. The caller returns after this - higher nonces are chain-blocked
-// behind it this tick either way.
+// give up
 func (w *Worker) tryBump(ctx context.Context, nonce uint64, jobID string, job *Job) {
 	lastAttempt := job.Execution.Attempts[len(job.Execution.Attempts)-1]
 	if time.Since(lastAttempt.SentAt) < w.cfg.ResendInterval {
@@ -206,6 +211,7 @@ func (w *Worker) tryBump(ctx context.Context, nonce uint64, jobID string, job *J
 	w.bumpInflight(ctx, job, lastAttempt)
 }
 
+// finalise transitions the job to mined/reverted and removes it from inflight.
 func (w *Worker) finalise(nonce uint64, jobID string, receipt *types.Receipt) {
 	state := StateMined
 	if receipt.Status == types.ReceiptStatusFailed {
@@ -224,6 +230,7 @@ func (w *Worker) finalise(nonce uint64, jobID string, receipt *types.Receipt) {
 	)
 }
 
+// markStuck records the stuck state, drops the inflight entry, and resyncs the nonce.
 func (w *Worker) markStuck(ctx context.Context, nonce uint64, jobID string) {
 	w.registry.Update(jobID, func(j *Job) {
 		j.State = StateStuck
@@ -231,9 +238,7 @@ func (w *Worker) markStuck(ctx context.Context, nonce uint64, jobID string) {
 	})
 	delete(w.inflight, nonce)
 	// ALERTING: wire a production alert on this error log. The MVP does not attempt
-	// automated recovery (cancel-tx, escalating bumps, etc.) - those paths have their
-	// own failure modes and were out of scope for the time budget. See README (Stuck
-	// handling) for the full discussion and the operator playbook.
+	// automated recovery (cancel-tx, escalating bumps, etc.)
 	slog.Error("job stuck - WALLET REQUIRES INTERVENTION",
 		"job_id", jobID,
 		"nonce", nonce,
@@ -243,6 +248,7 @@ func (w *Worker) markStuck(ctx context.Context, nonce uint64, jobID string) {
 	w.resyncNonce(ctx)
 }
 
+// bumpInflight re-broadcasts the job with ceiling-bumped tip and fee caps.
 func (w *Worker) bumpInflight(ctx context.Context, job *Job, lastAttempt Attempt) {
 	bumpCount := len(job.Execution.Attempts) - 1
 	log := slog.With("job_id", job.ID, "nonce", job.Execution.Nonce, "bump", bumpCount+1)
@@ -287,6 +293,7 @@ func (w *Worker) bumpInflight(ctx context.Context, job *Job, lastAttempt Attempt
 	log.Info("replacement broadcast ok", "hash", result.Hash.Hex())
 }
 
+// resyncNonce refreshes nextNonce from the chain. Logs on failure, no retry.
 func (w *Worker) resyncNonce(ctx context.Context) {
 	rpcCtx, cancel := context.WithTimeout(ctx, w.cfg.RPCTimeout)
 	nonce, err := w.executor.PendingNonce(rpcCtx)

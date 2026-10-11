@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/mj52951/evm-tx-sender/internal/sender"
+	"github.com/mj52951/evm-tx-sender/internal/job"
 )
 
 type AttemptResponse struct {
@@ -37,9 +37,9 @@ type JobResponse struct {
 	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
-func NewJobResponse(job *sender.Job) JobResponse {
-	attempts := make([]AttemptResponse, len(job.Execution.Attempts))
-	for i, attempt := range job.Execution.Attempts {
+func NewJobResponse(jobEntry *job.Job) JobResponse {
+	attempts := make([]AttemptResponse, len(jobEntry.Execution.Attempts))
+	for i, attempt := range jobEntry.Execution.Attempts {
 		attempts[i] = AttemptResponse{
 			Hash:     attempt.Hash.Hex(),
 			GasLimit: attempt.GasLimit,
@@ -49,16 +49,16 @@ func NewJobResponse(job *sender.Job) JobResponse {
 		}
 	}
 	return JobResponse{
-		JobID:     job.ID,
-		Status:    string(job.State),
-		ChainID:   job.Request.ChainID,
-		Sender:    job.Request.Sender.Hex(),
-		Nonce:     job.Execution.Nonce,
+		JobID:     jobEntry.ID,
+		Status:    string(jobEntry.State),
+		ChainID:   jobEntry.Request.ChainID,
+		Sender:    jobEntry.Request.Sender.Hex(),
+		Nonce:     jobEntry.Execution.Nonce,
 		Attempts:  attempts,
-		Receipt:   newReceiptResponse(job.Execution.Receipt),
-		Error:     job.Execution.ErrorMsg,
-		CreatedAt: job.CreatedAt,
-		UpdatedAt: job.UpdatedAt,
+		Receipt:   newReceiptResponse(jobEntry.Execution.Receipt),
+		Error:     jobEntry.Execution.ErrorMsg,
+		CreatedAt: jobEntry.CreatedAt,
+		UpdatedAt: jobEntry.UpdatedAt,
 	}
 }
 

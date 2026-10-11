@@ -1,4 +1,4 @@
-package sender
+package job
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func newTestWorker(t *testing.T, client *mocks.MockClient) *Worker {
 	require.NoError(t, err)
 	executor := wallet.New(client, privKey)
 	registry := NewJobRegistry()
-	cfg := config.SenderConfig{
+	cfg := config.WorkerConfig{
 		ResendInterval: 30 * time.Second,
 		MaxBumps:       3,
 		BumpPercent:    125,

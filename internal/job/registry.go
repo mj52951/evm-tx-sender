@@ -1,4 +1,4 @@
-package sender
+package job
 
 import (
 	"sync"

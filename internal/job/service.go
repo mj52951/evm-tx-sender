@@ -1,20 +1,14 @@
-package sender
+package job
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/sync/errgroup"
 )
 
 var ErrUnknownSender = errors.New("no worker for the given chain and sender")
-
-type WorkerKey struct {
-	ChainID uint64
-	Sender  common.Address
-}
 
 type Service struct {
 	registry *JobRegistry
@@ -56,7 +50,7 @@ func (s *Service) Get(id string) (*Job, bool) {
 }
 
 // Start runs every worker in a sibling goroutine and blocks until ctx is
-// cancelled or any worker returns an error (fail-fast).
+// cancelled or any worker returns an error on startup
 func (s *Service) Start(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
 	for key, worker := range s.workers {

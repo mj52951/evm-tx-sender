@@ -9,11 +9,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/mj52951/evm-tx-sender/internal/sender"
+	"github.com/mj52951/evm-tx-sender/internal/job"
 )
 
 type Handler struct {
-	service *sender.Service
+	service *job.Service
 }
 
 func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
@@ -29,12 +29,12 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job, err := h.service.Submit(r.Context(), jobReq)
+	createdJob, err := h.service.Submit(r.Context(), jobReq)
 	if err != nil {
 		switch {
-		case errors.Is(err, sender.ErrUnknownSender):
+		case errors.Is(err, job.ErrUnknownSender):
 			writeError(w, http.StatusBadRequest, err.Error())
-		case errors.Is(err, sender.ErrBusy):
+		case errors.Is(err, job.ErrBusy):
 			writeError(w, http.StatusTooManyRequests, err.Error())
 		case errors.Is(err, context.DeadlineExceeded):
 			writeError(w, http.StatusGatewayTimeout, err.Error())
@@ -46,20 +46,20 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := http.StatusCreated
-	if job.State == sender.StateFailed {
+	if createdJob.State == job.StateFailed {
 		status = http.StatusBadGateway
 	}
-	writeJSON(w, status, NewJobResponse(job))
+	writeJSON(w, status, NewJobResponse(createdJob))
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	jobID := chi.URLParam(r, "jobId")
-	job, ok := h.service.Get(jobID)
+	fetchedJob, ok := h.service.Get(jobID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "job not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, NewJobResponse(job))
+	writeJSON(w, http.StatusOK, NewJobResponse(fetchedJob))
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

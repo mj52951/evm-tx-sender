@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/mj52951/evm-tx-sender/internal/sender"
+	"github.com/mj52951/evm-tx-sender/internal/job"
 	"github.com/mj52951/evm-tx-sender/internal/wallet"
 )
 
@@ -23,18 +23,18 @@ type SubmitRequest struct {
 	MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas,omitempty"`
 }
 
-func (r SubmitRequest) ToJobRequest() (sender.JobRequest, error) {
+func (r SubmitRequest) ToJobRequest() (job.JobRequest, error) {
 	if r.Network == 0 {
-		return sender.JobRequest{}, errors.New("network is required")
+		return job.JobRequest{}, errors.New("network is required")
 	}
 	if !common.IsHexAddress(r.Sender) {
-		return sender.JobRequest{}, fmt.Errorf("invalid sender address %q", r.Sender)
+		return job.JobRequest{}, fmt.Errorf("invalid sender address %q", r.Sender)
 	}
 
 	var to *common.Address
 	if r.To != "" {
 		if !common.IsHexAddress(r.To) {
-			return sender.JobRequest{}, fmt.Errorf("invalid to address %q", r.To)
+			return job.JobRequest{}, fmt.Errorf("invalid to address %q", r.To)
 		}
 		address := common.HexToAddress(r.To)
 		to = &address
@@ -44,7 +44,7 @@ func (r SubmitRequest) ToJobRequest() (sender.JobRequest, error) {
 	if r.Value != "" {
 		wei, err := parseBigInt(r.Value)
 		if err != nil {
-			return sender.JobRequest{}, fmt.Errorf("value: %w", err)
+			return job.JobRequest{}, fmt.Errorf("value: %w", err)
 		}
 		value = wei
 	}
@@ -53,7 +53,7 @@ func (r SubmitRequest) ToJobRequest() (sender.JobRequest, error) {
 	if r.Data != "" {
 		decoded, err := hexutil.Decode(r.Data)
 		if err != nil {
-			return sender.JobRequest{}, fmt.Errorf("invalid data hex: %w", err)
+			return job.JobRequest{}, fmt.Errorf("invalid data hex: %w", err)
 		}
 		payload = decoded
 	}
@@ -62,7 +62,7 @@ func (r SubmitRequest) ToJobRequest() (sender.JobRequest, error) {
 	if r.MaxPriorityFeePerGas != "" {
 		wei, err := parseBigInt(r.MaxPriorityFeePerGas)
 		if err != nil {
-			return sender.JobRequest{}, fmt.Errorf("maxPriorityFeePerGas: %w", err)
+			return job.JobRequest{}, fmt.Errorf("maxPriorityFeePerGas: %w", err)
 		}
 		tipCap = wei
 	}
@@ -71,12 +71,12 @@ func (r SubmitRequest) ToJobRequest() (sender.JobRequest, error) {
 	if r.MaxFeePerGas != "" {
 		wei, err := parseBigInt(r.MaxFeePerGas)
 		if err != nil {
-			return sender.JobRequest{}, fmt.Errorf("maxFeePerGas: %w", err)
+			return job.JobRequest{}, fmt.Errorf("maxFeePerGas: %w", err)
 		}
 		feeCap = wei
 	}
 
-	return sender.JobRequest{
+	return job.JobRequest{
 		ChainID: r.Network,
 		Sender:  common.HexToAddress(r.Sender),
 		To:      to,

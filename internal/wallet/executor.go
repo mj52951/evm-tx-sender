@@ -17,14 +17,14 @@ import (
 
 const (
 	tipBufferPct      = 120 // tipCap = SuggestGasTipCap * 1.2
-	baseFeeBufferPct  = 200 // feeCap includes 2x baseFee for next-block spike tolerance
+	baseFeeBufferPct  = 200 // feeCap = BaseFee * 2
 	gasLimitBufferPct = 130 // gasLimit = EstimateGas * 1.3
 )
 
 type Fees struct {
-	GasLimit uint64   // 0 = auto-estimate
-	TipCap   *big.Int // nil = auto-suggest
-	FeeCap   *big.Int // nil = auto-suggest
+	GasLimit uint64
+	TipCap   *big.Int
+	FeeCap   *big.Int
 }
 
 type TxOption func(*Fees)

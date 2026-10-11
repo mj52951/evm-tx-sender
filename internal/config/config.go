@@ -13,9 +13,8 @@ type LogConfig struct {
 	Level string `env:"LOG_LEVEL" envDefault:"info" validate:"oneof=debug info warn error"`
 }
 
-// SenderConfig holds the replace-by-fee and backpressure knobs shared by every worker.
-type SenderConfig struct {
-	ResendInterval time.Duration `env:"RESEND_INTERVAL" envDefault:"30s"   validate:"gte=1s"`
+type WorkerConfig struct {
+	ResendInterval time.Duration `env:"RESEND_INTERVAL" envDefault:"15s"   validate:"gte=1s"`
 	MaxBumps       int           `env:"MAX_BUMPS"       envDefault:"3"     validate:"gte=0"`
 	BumpPercent    uint          `env:"BUMP_PERCENT"    envDefault:"125"   validate:"gte=110"`
 	TickInterval   time.Duration `env:"TICK_INTERVAL"   envDefault:"1s"    validate:"gte=100ms"`
@@ -25,8 +24,8 @@ type SenderConfig struct {
 type EnvConfig struct {
 	HTTPAddr string `env:"HTTP_ADDR" envDefault:"0.0.0.0:8080" validate:"hostname_port"`
 
-	Log    LogConfig
-	Sender SenderConfig
+	Log       LogConfig
+	WorkerCfg WorkerConfig
 
 	// Format: CHAIN_RPC_URLS=1=https://...,10=https://...
 	RPCURLs map[string]string `env:"CHAIN_RPC_URLS,required" envKeyValSeparator:"=" validate:"required,min=1"`

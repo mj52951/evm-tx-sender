@@ -27,7 +27,7 @@ type Client interface {
 	Close()
 }
 
-type ethAdapter struct {
+type EthClient struct {
 	*ethclient.Client
 	chainID *big.Int
 }
@@ -50,10 +50,10 @@ func New(ctx context.Context, chainConfig config.ChainConfig) (Client, error) {
 		client.Close()
 		return nil, fmt.Errorf("chain id mismatch: config %d, rpc returned %s", chainConfig.ChainID, chainID.String())
 	}
-	return &ethAdapter{Client: client, chainID: chainID}, nil
+	return &EthClient{Client: client, chainID: chainID}, nil
 }
 
 // ChainID returns the cached chain id
-func (a *ethAdapter) ChainID() *big.Int {
+func (a *EthClient) ChainID() *big.Int {
 	return new(big.Int).Set(a.chainID)
 }

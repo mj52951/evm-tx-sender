@@ -1,4 +1,4 @@
-package sender
+package job
 
 import (
 	"math/big"
@@ -14,14 +14,14 @@ import (
 type JobState string
 
 const (
-	StateBroadcast JobState = "broadcast" // on the wire, waiting to mine
+	StateBroadcast JobState = "broadcast" // sent, waiting to be mined
 	StateMined     JobState = "mined"
 	StateReverted  JobState = "reverted"
 	StateFailed    JobState = "failed" // broadcast errored unrecoverably
 	StateStuck     JobState = "stuck"  // bumps exhausted, no receipt
 )
 
-// JobRequest is the client-supplied part of a Job, immutable after creation.
+// JobRequest is the client-supplied part of a Job
 type JobRequest struct {
 	ChainID   uint64
 	Sender    common.Address
@@ -39,9 +39,7 @@ type JobExecution struct {
 	ErrorMsg string
 }
 
-// Attempt records a single broadcast of a Job (initial or replacement). The
-// full fee tuple is captured so the worker can reconstruct the bump base
-// without a sibling in-memory structure.
+// Attempt records a single broadcast of a Job (initial or replacement)
 type Attempt struct {
 	Hash     common.Hash
 	GasLimit uint64
@@ -63,8 +61,7 @@ type Job struct {
 	done chan struct{}
 }
 
-// NewJob builds a Job with a fresh ID and signalling channel. The caller
-// stores it in the registry and hands it to a Worker's Submit.
+// NewJob builds a Job with a fresh ID and signalling channel
 func NewJob(request JobRequest) *Job {
 	return &Job{
 		ID:        uuid.NewString(),
