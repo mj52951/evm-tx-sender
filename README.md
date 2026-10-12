@@ -227,6 +227,9 @@ Make `sender` optional; when absent, pick a free worker (round-robin or least-lo
 ### Persistent `JobRegistry`
 In-memory only today — restart loses data (clients get 404 on GET), but nonces re-sync from chain so new submits are still correct.
 
+### Async status checks
+Status checks and broadcasts share the same goroutine, so a heavy status-check loop can block new submits under load. Biggest easy win is using mutexes and running them in separate goroutines.
+
 ### Private keys in a vault
 Keys read from env (and the var is `unset` after load for crash-dump safety). A secrets manager (e.g.HashiCorp Vault) is the production next step.
 
